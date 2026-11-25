@@ -5,7 +5,7 @@ An iPhone app and lock screen widget that show where you are in your daily plan.
 ## Language
 
 **Feed**:
-The `feed.json` file the Action builds. It covers the plans for yesterday, today and tomorrow, and it is the only thing the app and widget read.
+The `feed.json` file the Action builds. It covers whichever of yesterday's, today's and tomorrow's plans exist, and it is the only thing the app and widget read.
 _Avoid_: data, JSON, schedule
 
 **Stale feed**:
@@ -17,7 +17,7 @@ The one push the server sends when a new feed is built. It carries no plan data,
 _Avoid_: sync push, update notification
 
 **Plan**:
-One day's planning note in the vault, as it appears in the feed: a date, priorities, and an ordered list of blocks.
+One day's planning note in the vault, as it appears in the feed: a date, priorities, and an ordered list of blocks. Its blocks never overlap in time; a plan where they do is a mistake in the vault, not something the app has to interpret.
 _Avoid_: day, schedule
 
 **Block**:
@@ -40,10 +40,14 @@ _Avoid_: alert, alarm
 A work block still marked planned an hour after it ended, because you never responded to its end reminder. It counts as not finished and is recorded with its own status, `missed`, which only the system sets.
 _Avoid_: stale block, expired block, dropped block
 
+**Moment**:
+What the lock screen shows at a given instant: in a block, in a break, waiting for the next block, nothing left, or can't refresh.
+_Avoid_: state, status (status is a block's own outcome)
+
 **Next block**:
 The earliest block that hasn't started yet, across every plan in the feed. The plan it belongs to doesn't matter, so after a late block ends, the next block can be tomorrow's first one.
 _Avoid_: upcoming task
 
 **Nothing left**:
-The state when the feed has no current or future block. It replaces both "Done for today" and "No plan today".
+The moment when the feed has no current or future block. It replaces both "Done for today" and "No plan today".
 _Avoid_: done for today, no plan today
