@@ -1,0 +1,16 @@
+# Xcode / build output
+build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+
+# XcodeGen output (regenerate with `xcodegen`)
+*.xcodeproj/
+
+# Secrets (read-only GitHub token etc.)
+Config/Secrets.xcconfig
+
+# Generated code explainers (local only)
+explanations/
+
+.DS_Store
