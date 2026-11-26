@@ -1,0 +1,157 @@
+{
+  "version": 1,
+  "generated_at": "2026-11-23T06:00:00-05:00",
+  "today": "2026-11-23",
+  "source_commit": "0000000",
+  "days": [
+    {
+      "date": "2026-11-22",
+      "p1": "Project A",
+      "p2": null,
+      "window": "6:15pm-12:00am",
+      "note_path": "Plans/2026-11-22 Plan.md",
+      "parking_lot_count": 4,
+      "non_negotiables": [],
+      "blocks": [
+        {
+          "row": 1,
+          "start": "2026-11-22T18:15:00-05:00",
+          "end": "2026-11-22T18:40:00-05:00",
+          "task": "Task 1",
+          "priority": "P1 · Project",
+          "done_test": "Done test 1",
+          "tips": [],
+          "actual_end": null,
+          "status": "skipped",
+          "status_raw": "skipped",
+          "kind": "work",
+          "time_uncertain": false
+        },
+        {
+          "row": 2,
+          "start": "2026-11-22T18:40:00-05:00",
+          "end": "2026-11-22T19:00:00-05:00",
+          "task": "Task 2",
+          "priority": "P1 · Project",
+          "done_test": "Done test 2",
+          "tips": [],
+          "actual_end": "7:00 PM",
+          "status": "done",
+          "status_raw": "done",
+          "kind": "work",
+          "time_uncertain": false
+        },
+        {
+          "row": 3,
+          "start": "2026-11-22T19:00:00-05:00",
+          "end": "2026-11-22T20:00:00-05:00",
+          "task": "Task 3",
+          "priority": "P3 · Project",
+          "done_test": "Done test 3",
+          "tips": [],
+          "actual_end": null,
+          "status": "skipped",
+          "status_raw": "skipped",
+          "kind": "work",
+          "time_uncertain": false
+        },
+        {
+          "row": 4,
+          "start": "2026-11-22T21:30:00-05:00",
+          "end": "2026-11-22T23:00:00-05:00",
+          "task": "Task 4",
+          "priority": "P1 · Project",
+          "done_test": "Done test 4",
+          "tips": [],
+          "actual_end": "7:30 PM",
+          "status": "done",
+          "status_raw": "done",
+          "kind": "work",
+          "time_uncertain": false
+        },
+        {
+          "row": 5,
+          "start": "2026-11-22T23:00:00-05:00",
+          "end": "2026-11-22T23:50:00-05:00",
+          "task": "Task 5",
+          "priority": "P2 · Project",
+          "done_test": "Done test 5",
+          "tips": [],
+          "actual_end": null,
+          "status": "skipped",
+          "status_raw": "skipped",
+          "kind": "work",
+          "time_uncertain": false
+        }
+      ]
+    },
+    {
+      "date": "2026-11-23",
+      "p1": "Project A",
+      "p2": null,
+      "window": "10:30am-7:00pm",
+      "note_path": "Plans/2026-11-23 Plan.md",
+      "parking_lot_count": 4,
+      "non_negotiables": [],
+      "blocks": [
+        {
+          "row": 1,
+          "start": "2026-11-23T10:30:00-05:00",
+          "end": "2026-11-23T11:50:00-05:00",
+          "task": "Task 1",
+          "priority": "Priority",
+          "done_test": "Done test 1",
+          "tips": [],
+          "actual_end": null,
+          "status": "planned",
+          "status_raw": "planned",
+          "kind": "work",
+          "time_uncertain": false
+        },
+        {
+          "row": 2,
+          "start": "2026-11-23T11:50:00-05:00",
+          "end": "2026-11-23T12:20:00-05:00",
+          "task": "Task 2",
+          "priority": "Priority",
+          "done_test": "Done test 2",
+          "tips": [],
+          "actual_end": null,
+          "status": "planned",
+          "status_raw": "planned",
+          "kind": "work",
+          "time_uncertain": false
+        },
+        {
+          "row": 3,
+          "start": "2026-11-23T13:30:00-05:00",
+          "end": "2026-11-23T15:00:00-05:00",
+          "task": "Task 3",
+          "priority": "Priority",
+          "done_test": "Done test 3",
+          "tips": [],
+          "actual_end": null,
+          "status": "planned",
+          "status_raw": "planned",
+          "kind": "work",
+          "time_uncertain": false
+        },
+        {
+          "row": 4,
+          "start": "2026-11-23T15:00:00-05:00",
+          "end": "2026-11-23T16:00:00-05:00",
+          "task": "Task 4",
+          "priority": "Priority",
+          "done_test": "Done test 4",
+          "tips": [],
+          "actual_end": null,
+          "status": "planned",
+          "status_raw": "planned",
+          "kind": "work",
+          "time_uncertain": false
+        }
+      ]
+    }
+  ],
+  "warnings": []
+}

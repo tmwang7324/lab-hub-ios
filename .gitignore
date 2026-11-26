@@ -1,4 +1,6 @@
 # Xcode / build output
+.build/
+.swiftpm/
 build/
 DerivedData/
 *.xcuserstate
@@ -14,3 +16,6 @@ Config/Secrets.xcconfig
 explanations/
 
 .DS_Store
+
+# Python bytecode
+__pycache__/
