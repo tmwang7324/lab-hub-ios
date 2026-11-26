@@ -140,3 +140,89 @@ struct MomentCurrentBlockTests {
         }
     }
 }
+
+// Ticket #4: no block is current, but one is still to come.
+
+@Suite("Moment: waiting for the next block")
+struct MomentWaitingTests {
+    @Test("a gap between two blocks waits for the following block")
+    func gap() throws {
+        // Nov 20: block 1 ends 10:30, block 2 runs 10:40 to 11:10.
+        let moment = try Moment.resolve(feedData: Fixture.data("feed-2026-11-20"), at: ny("2026-11-20 10:35"))
+        #expect(moment == .waiting(text: "Task 2", start: ny("2026-11-20 10:40"), end: ny("2026-11-20 11:10")))
+    }
+
+    @Test("at a block's exact end, with a gap after it, the Moment is waiting")
+    func exactEndOfBlockBeforeGap() throws {
+        let moment = try Moment.resolve(feedData: Fixture.data("feed-2026-11-20"), at: ny("2026-11-20 10:30"))
+        #expect(moment == .waiting(text: "Task 2", start: ny("2026-11-20 10:40"), end: ny("2026-11-20 11:10")))
+    }
+
+    @Test("one second before a block starts it is still the Next block")
+    func lastSecondBeforeStart() throws {
+        let moment = try Moment.resolve(feedData: Fixture.data("feed-2026-11-20"),
+                                        at: ny("2026-11-20 10:40").addingTimeInterval(-1))
+        #expect(moment == .waiting(text: "Task 2", start: ny("2026-11-20 10:40"), end: ny("2026-11-20 11:10")))
+    }
+
+    @Test("before the day's first block it waits for that block", arguments: [
+        "2026-11-20 06:00", "2026-11-20 09:00", "2026-11-20 09:29",
+    ])
+    func beforeFirstBlock(at: String) throws {
+        // Yesterday's (Nov 19) blocks all ended by 20:30, so today's block 1 at 09:30 is next.
+        let moment = try Moment.resolve(feedData: Fixture.data("feed-2026-11-20"), at: ny(at))
+        #expect(moment == .waiting(text: "Task 1", start: ny("2026-11-20 09:30"), end: ny("2026-11-20 10:30")))
+    }
+
+    @Test("after the last block of a plan, the Next block is tomorrow's first block")
+    func tomorrowsFirstBlock() throws {
+        // Nov 10 feed: the Nov 10 plan's last block ends 00:30 on Nov 11; the Nov 11 plan starts at 13:00.
+        let moment = try Moment.resolve(feedData: Fixture.data("feed-2026-11-10"), at: ny("2026-11-11 00:30"))
+        #expect(moment == .waiting(text: "Task 1", start: ny("2026-11-11 13:00"), end: ny("2026-11-11 14:00")))
+    }
+
+    @Test("after yesterday's late block ends, the Next block is today's first block")
+    func yesterdaysLastBlockThenToday() throws {
+        // Nov 10 feed: the Nov 9 plan's block 7 ends 00:50 on Nov 10; the Nov 10 plan starts at 10:30.
+        let moment = try Moment.resolve(feedData: Fixture.data("feed-2026-11-10"), at: ny("2026-11-10 01:00"))
+        #expect(moment == .waiting(text: "Task 1", start: ny("2026-11-10 10:30"), end: ny("2026-11-10 11:20")))
+    }
+
+    @Test("the Next block does not depend on the order of the plans in the feed")
+    func planOrderDoesNotMatter() throws {
+        let inOrder = try Fixture.data("feed-2026-11-10")
+        let reversed = try Fixture.mutatedDays("feed-2026-11-10") { $0.reverse() }
+        let expected = Moment.waiting(text: "Task 1", start: ny("2026-11-10 10:30"), end: ny("2026-11-10 11:20"))
+
+        #expect(try Moment.resolve(feedData: inOrder, at: ny("2026-11-10 01:00")) == expected)
+        #expect(try Moment.resolve(feedData: reversed, at: ny("2026-11-10 01:00")) == expected)
+    }
+
+    @Test("the Next block is the earliest to start, not the first listed")
+    func earliestNotFirstListed() throws {
+        // Reverse the blocks inside the Nov 20 plan: block 3 is now listed first, but block 2 starts first.
+        let data = try Fixture.mutatedDays("feed-2026-11-20") { days in
+            var blocks = days[days.count - 1]["blocks"] as! [[String: Any]]
+            blocks.reverse()
+            days[days.count - 1]["blocks"] = blocks
+        }
+        let moment = try Moment.resolve(feedData: data, at: ny("2026-11-20 10:35"))
+        #expect(moment == .waiting(text: "Task 2", start: ny("2026-11-20 10:40"), end: ny("2026-11-20 11:10")))
+    }
+
+    @Test("a plan with no blocks is skipped when finding the Next block")
+    func emptyPlanIsSkipped() throws {
+        // Nov 10 feed with the Nov 10 plan emptied: after yesterday's block 7 ends, the next is Nov 11's first.
+        let data = try Fixture.mutatedDays("feed-2026-11-10") { $0[1]["blocks"] = [[String: Any]]() }
+        let moment = try Moment.resolve(feedData: data, at: ny("2026-11-10 01:00"))
+        #expect(moment == .waiting(text: "Task 1", start: ny("2026-11-11 13:00"), end: ny("2026-11-11 14:00")))
+    }
+
+    @Test("a block that can never be current is never the Next block")
+    func invalidBlockIsNeverNext() throws {
+        // Nov 20 block 1 made zero-length at 09:30: block 2 at 10:40 is next instead.
+        let data = try Fixture.mutatedFirstBlock("feed-2026-11-20") { $0["end"] = $0["start"] }
+        let moment = try Moment.resolve(feedData: data, at: ny("2026-11-20 09:00"))
+        #expect(moment == .waiting(text: "Task 2", start: ny("2026-11-20 10:40"), end: ny("2026-11-20 11:10")))
+    }
+}

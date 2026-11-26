@@ -92,6 +92,16 @@ struct MomentDiagnosticsTests {
         #expect(recorder.messages(.info, .moment).first?.contains("no block is current") == true)
     }
 
+    @Test("waiting logs the Next block's id, not its text")
+    func logsNextBlock() throws {
+        let recorder = LogRecorder()
+        _ = try Moment.resolve(feedData: Fixture.data("feed-2026-11-20"), at: ny("2026-11-20 10:35"), log: recorder.log)
+
+        let line = try #require(recorder.messages(.info, .moment).first)
+        #expect(line.contains("waiting for 2026-11-20#2"))
+        #expect(!line.contains("Task 2"))
+    }
+
     @Test("blocks that overlap are a warning that names both ids")
     func overlapWarns() throws {
         // Nov 9 plan: blocks 5 and 6 overlap between 21:40 and 23:10.

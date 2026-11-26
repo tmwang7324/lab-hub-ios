@@ -27,6 +27,15 @@ extension Fixture {
         return try JSONSerialization.data(withJSONObject: json)
     }
 
+    /// A fixture with its list of plans (`days`) edited, e.g. to empty a plan or reorder the plans.
+    static func mutatedDays(_ name: String, _ edit: @escaping (inout [[String: Any]]) -> Void) throws -> Data {
+        try mutated(name) { json in
+            var days = json["days"] as! [[String: Any]]
+            edit(&days)
+            json["days"] = days
+        }
+    }
+
     /// Edits the first block of the last plan (the feed's "today") in a fixture.
     static func mutatedFirstBlock(_ name: String, _ edit: @escaping (inout [String: Any]) -> Void) throws -> Data {
         try mutated(name) { json in
