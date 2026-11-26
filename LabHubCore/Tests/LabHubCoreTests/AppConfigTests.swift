@@ -33,14 +33,14 @@ struct AppConfigTests {
         var values = Self.valid
         values[key.rawValue] = nil
         #expect(validate(values).map(\.key) == [key])
-        #expect(validate(values).first?.problem == .missing)
+        #expect(validate(values).first?.reason == .missing)
     }
 
     @Test("an empty or whitespace value counts as missing")
     func blank() {
         var values = Self.valid
         values["GITHUB_TOKEN"] = "   "
-        #expect(validate(values).first?.problem == .missing)
+        #expect(validate(values).first?.reason == .missing)
     }
 
     @Test("the shipped placeholders are reported as placeholders, not as malformed", arguments: [
@@ -55,21 +55,21 @@ struct AppConfigTests {
         values[key] = placeholder
         let issues = validate(values)
         #expect(issues.map(\.key.rawValue) == [key])
-        #expect(issues.first?.problem == .placeholder)
+        #expect(issues.first?.reason == .placeholder)
     }
 
     @Test("a team id must be ten letters and digits")
     func teamIdShape() {
         var values = Self.valid
         values["APPLE_TEAM_ID"] = "too-short"
-        #expect(validate(values).first?.problem == .malformed)
+        #expect(validate(values).first?.reason == .malformed)
     }
 
     @Test("an app group must start with `group.`")
     func appGroupShape() {
         var values = Self.valid
         values["APP_GROUP_ID"] = "com.example.labhub"
-        #expect(validate(values).first?.problem == .malformed)
+        #expect(validate(values).first?.reason == .malformed)
     }
 
     @Test("a GitHub token must look like a fine-grained or classic token", arguments: [
@@ -87,7 +87,7 @@ struct AppConfigTests {
     func badTokens(token: String) {
         var values = Self.valid
         values["GITHUB_TOKEN"] = token
-        #expect(validate(values).first?.problem == .malformed)
+        #expect(validate(values).first?.reason == .malformed)
     }
 
     @Test("every issue is logged as an error that tells you what to do")
@@ -149,7 +149,7 @@ struct AppConfigTests {
         // And every shipped value is a placeholder, so no real secret can be committed by accident.
         let issues = AppConfig.validate(parsed, log: LabHubLog(sinks: []))
         #expect(issues.count == AppConfig.Key.allCases.count)
-        #expect(issues.allSatisfy { $0.problem == .placeholder })
+        #expect(issues.allSatisfy { $0.reason == .placeholder })
     }
 
     @Test("an xcconfig parser reads KEY = value lines and skips comments")

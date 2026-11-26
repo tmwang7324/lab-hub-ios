@@ -25,37 +25,37 @@ public enum AppConfig {
     }
 
     public struct Issue: Equatable, Sendable {
-        public enum Problem: Equatable, Sendable { case missing, placeholder, malformed }
+        public enum Reason: Equatable, Sendable { case missing, placeholder, malformed }
         public let key: Key
-        public let problem: Problem
+        public let reason: Reason
     }
 
     static let tokenPrefixes = ["github_pat_", "ghp_"]
 
-    /// Checks `values` (key name to value) and logs every problem as an error. Returns the problems.
+    /// Checks `values` (key name to value) and logs every issue as an error. Returns the issues.
     @discardableResult
     public static func validate(_ values: [String: String], log: LabHubLog = .shared) -> [Issue] {
         var issues: [Issue] = []
         for key in Key.allCases {
             let value = values[key.rawValue]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            let problem: Issue.Problem?
+            let reason: Issue.Reason?
             if value.isEmpty {
-                problem = .missing
+                reason = .missing
             } else if isPlaceholder(value) {
-                problem = .placeholder
+                reason = .placeholder
             } else if !isWellFormed(value, for: key) {
-                problem = .malformed
+                reason = .malformed
             } else {
-                problem = nil
+                reason = nil
             }
 
-            guard let problem else {
+            guard let reason else {
                 log.info(.config, "\(key.rawValue) \(describeGoodValue(value, for: key))")
                 continue
             }
-            issues.append(Issue(key: key, problem: problem))
+            issues.append(Issue(key: key, reason: reason))
             let what: String
-            switch problem {
+            switch reason {
             case .missing: what = "is missing"
             case .placeholder: what = "is still the placeholder value"
             case .malformed: what = "has an unexpected format (its value is not shown)"

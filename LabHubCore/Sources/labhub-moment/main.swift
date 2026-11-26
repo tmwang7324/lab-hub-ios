@@ -51,11 +51,11 @@ do {
 }
 
 do {
-    let end = ISO8601DateFormatter()
-    end.timeZone = .current
+    let localTimeFormatter = ISO8601DateFormatter()
+    localTimeFormatter.timeZone = .current
     switch try Moment.resolve(feedData: data, at: instant, log: log) {
-    case .inBlock(let text, let until)?: print("in a block: \(text) (until \(end.string(from: until)))")
-    case .inBreak(let text, let until)?: print("in a break: \(text) (until \(end.string(from: until)))")
+    case .inBlock(let text, let until)?: print("in a block: \(text) (until \(localTimeFormatter.string(from: until)))")
+    case .inBreak(let text, let until)?: print("in a break: \(text) (until \(localTimeFormatter.string(from: until)))")
     case nil: print("no block is current")
     }
 } catch {

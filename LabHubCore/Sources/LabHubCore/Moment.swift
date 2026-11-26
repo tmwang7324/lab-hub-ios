@@ -26,20 +26,20 @@ public enum Moment: Equatable, Sendable {
     }
 
     static func resolve(feed: Feed, at instant: Date, log: LabHubLog) -> Moment? {
-        let stamp = Self.stamp(instant)
+        let instantText = Self.formattedForLog(instant)
         // A block is current from its start up to, but not including, its end. A block whose end is
         // not after its start therefore never matches. Plans are not treated separately.
         let current = feed.plans.flatMap(\.blocks).filter { $0.start <= instant && instant < $0.end }
 
         guard let block = current.first else {
-            log.info(.moment, "resolve at \(stamp): no block is current")
+            log.info(.moment, "resolve at \(instantText): no block is current")
             return nil
         }
         if current.count > 1 {
             // Overlap is a mistake in the vault (CONTEXT.md, Plan). Use the first, but say so.
-            log.warning(.moment, "resolve at \(stamp): \(current.count) blocks overlap (\(current.map(\.id).joined(separator: ", "))); using \(block.id)")
+            log.warning(.moment, "resolve at \(instantText): \(current.count) blocks overlap (\(current.map(\.id).joined(separator: ", "))); using \(block.id)")
         }
-        log.info(.moment, "resolve at \(stamp): in \(block.kind.rawValue) block \(block.id) until \(Self.stamp(block.end))")
+        log.info(.moment, "resolve at \(instantText): in \(block.kind.rawValue) block \(block.id) until \(Self.formattedForLog(block.end))")
 
         switch block.kind {
         case .work: return .inBlock(text: block.task, end: block.end)
@@ -48,7 +48,7 @@ public enum Moment: Equatable, Sendable {
     }
 
     /// A time for the log, in the phone's own time zone with its offset, e.g. `2026-11-20T10:00:00-05:00`.
-    private static func stamp(_ date: Date) -> String {
+    private static func formattedForLog(_ date: Date) -> String {
         date.formatted(Date.ISO8601FormatStyle(timeZoneSeparator: .colon, timeZone: .current))
     }
 }

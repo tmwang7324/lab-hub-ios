@@ -32,13 +32,13 @@ struct Feed: Decodable, Equatable, Sendable {
             }
             return feed
         } catch {
-            log.error(.feed, "feed decode failed (\(data.count) bytes): \(describe(error))")
+            log.error(.feed, "feed decode failed (\(data.count) bytes): \(readableReason(for: error))")
             throw error
         }
     }
 
     /// A one-line, plain-language reason for a decoding failure, with the path to the broken field.
-    static func describe(_ error: Error) -> String {
+    static func readableReason(for error: Error) -> String {
         guard let error = error as? DecodingError else { return String(describing: error) }
         func path(_ keys: [any CodingKey]) -> String {
             keys.reduce("") { $0 + ($1.intValue.map { "[\($0)]" } ?? ($0.isEmpty ? "" : ".") + $1.stringValue) }
@@ -71,11 +71,15 @@ struct Plan: Decodable, Equatable, Sendable {
         let date = try container.decode(String.self, forKey: .date)
         self.date = date
         blocks = try container.decode([Block.Wire].self, forKey: .blocks)
-            .map { Block(wire: $0, date: date) }
+            .map { Block(date: date, wire: $0) }
     }
 }
 
 /// One scheduled block of time within a plan.
+///
+/// A block is a `Wire` (every field exactly as `feed.json` has it) plus the date of the plan it belongs to.
+/// `@dynamicMemberLookup` lets callers write `block.start` instead of `block.wire.start`.
+@dynamicMemberLookup
 struct Block: Equatable, Sendable {
     enum Kind: String, Decodable, Sendable {
         case work
@@ -86,24 +90,18 @@ struct Block: Equatable, Sendable {
         case planned, done, failed, skipped, missed
     }
 
+    /// The date of the plan this block belongs to (the feed doesn't repeat it on each row).
     let date: String
-    let row: Int
-    let start: Date
-    let end: Date
-    let task: String
-    let priority: String
-    let doneTest: String
-    let actualEnd: String?
-    /// `nil` when the feed's status is missing, `null` or not one we know.
-    let status: Status?
-    let kind: Kind
-    /// Defaults to `false`: the generator doesn't write `private` yet.
-    let isPrivate: Bool
+    let wire: Wire
 
-    var id: String { "\(date)#\(row)" }
+    var id: String { "\(date)#\(wire.row)" }
+
+    subscript<Value>(dynamicMember keyPath: KeyPath<Wire, Value>) -> Value {
+        wire[keyPath: keyPath]
+    }
 
     /// The block as it appears in `feed.json`, before the plan's date is attached.
-    struct Wire: Decodable {
+    struct Wire: Decodable, Equatable, Sendable {
         let row: Int
         let start: Date
         let end: Date
@@ -111,8 +109,10 @@ struct Block: Equatable, Sendable {
         let priority: String
         let doneTest: String
         let actualEnd: String?
+        /// `nil` when the feed's status is missing, `null` or not one we know.
         let status: Status?
         let kind: Kind
+        /// Defaults to `false`: the generator doesn't write `private` yet.
         let isPrivate: Bool
 
         private enum CodingKeys: String, CodingKey {
@@ -135,19 +135,5 @@ struct Block: Equatable, Sendable {
             kind = try c.decode(Kind.self, forKey: .kind)
             isPrivate = try c.decodeIfPresent(Bool.self, forKey: .isPrivate) ?? false
         }
-    }
-
-    init(wire: Wire, date: String) {
-        self.date = date
-        row = wire.row
-        start = wire.start
-        end = wire.end
-        task = wire.task
-        priority = wire.priority
-        doneTest = wire.doneTest
-        actualEnd = wire.actualEnd
-        status = wire.status
-        kind = wire.kind
-        isPrivate = wire.isPrivate
     }
 }
