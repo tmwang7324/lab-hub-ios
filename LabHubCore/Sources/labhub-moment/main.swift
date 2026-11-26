@@ -54,10 +54,10 @@ do {
     let localTimeFormatter = ISO8601DateFormatter()
     localTimeFormatter.timeZone = .current
     switch try Moment.resolve(feedData: data, at: instant, log: log) {
-    case .inBlock(let text, let until)?: print("in a block: \(text) (until \(localTimeFormatter.string(from: until)))")
-    case .inBreak(let text, let until)?: print("in a break: \(text) (until \(localTimeFormatter.string(from: until)))")
-    case .waiting(let text, let start, _)?: print("waiting: next is \(text) at \(localTimeFormatter.string(from: start))")
-    case nil: print("no block is current")
+    case .inBlock(let text, let until): print("in a block: \(text) (until \(localTimeFormatter.string(from: until)))")
+    case .inBreak(let text, let until): print("in a break: \(text) (until \(localTimeFormatter.string(from: until)))")
+    case .waiting(let text, let start, _): print("waiting: next is \(text) at \(localTimeFormatter.string(from: start))")
+    case .nothingLeft: print("nothing left")
     }
 } catch {
     // The decoder has already logged exactly which field failed.

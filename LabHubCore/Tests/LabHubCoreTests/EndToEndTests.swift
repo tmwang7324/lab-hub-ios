@@ -74,11 +74,11 @@ struct CommandLineEndToEndTests {
         #expect(result.stderr.contains("waiting for 2026-11-20#2"))
     }
 
-    @Test("after the last block it says no block is current")
-    func noBlock() throws {
+    @Test("after the last block of a fresh feed it says nothing left")
+    func nothingLeft() throws {
         let result = try CLI.run([CLI.fixturePath("feed-2026-11-20"), "--at", "2026-11-20T12:00:00-05:00"])
         #expect(result.status == 0)
-        #expect(result.stdout == "no block is current\n")
+        #expect(result.stdout == "nothing left\n")
     }
 
     @Test("an instant given in UTC gives the same answer as one given in New York time")
@@ -195,7 +195,7 @@ private struct Oracle {
 
         // Nothing current: the Next block is any block (of any plan) that starts soonest after the instant.
         let future = rows.filter { instant < $0.start && $0.start < $0.end }
-        guard let soonest = future.map(\.start).min() else { return [] }
+        guard let soonest = future.map(\.start).min() else { return [.nothingLeft] }
         return future.filter { $0.start == soonest }.map { Moment.waiting(text: $0.task, start: $0.start, end: $0.end) }
     }
 
@@ -246,11 +246,6 @@ struct SweepEndToEndTests {
     private func check(_ data: Data, _ oracle: Oracle, at instant: Date, log: LabHubLog) throws {
         let moment = try Moment.resolve(feedData: data, at: instant, log: log)
         let acceptable = oracle.acceptable(at: instant)
-        if acceptable.isEmpty {
-            #expect(moment == nil, "at \(instant): nothing should be current, got \(String(describing: moment))")
-        } else {
-            #expect(moment.map(acceptable.contains) == true,
-                    "at \(instant): got \(String(describing: moment)), oracle allows \(acceptable)")
-        }
+        #expect(acceptable.contains(moment), "at \(instant): got \(moment), oracle allows \(acceptable)")
     }
 }

@@ -15,19 +15,19 @@ public enum Moment: Equatable, Sendable {
     case inBreak(text: String, end: Date)
     /// No block is current, but one is still to come: the Next block (CONTEXT.md), with its times.
     case waiting(text: String, start: Date, end: Date)
+    /// No block is current or still to come (CONTEXT.md, Nothing left). It covers both "done for
+    /// today" and "no plan today".
+    case nothingLeft
 
     /// The one entry point: feed bytes plus an instant give the Moment.
     ///
-    /// Returns `nil` when no block is current or still to come. Tickets #5 and #6 replace that with
-    /// the nothing-left and can't-refresh Moments.
-    ///
     /// Throws if the feed can't be decoded. Everything it does is logged to `log` (block ids only, never plan text).
-    public static func resolve(feedData: Data, at instant: Date, log: LabHubLog = .shared) throws -> Moment? {
+    public static func resolve(feedData: Data, at instant: Date, log: LabHubLog = .shared) throws -> Moment {
         let feed = try Feed.decode(feedData, log: log)
         return resolve(feed: feed, at: instant, log: log)
     }
 
-    static func resolve(feed: Feed, at instant: Date, log: LabHubLog) -> Moment? {
+    static func resolve(feed: Feed, at instant: Date, log: LabHubLog) -> Moment {
         let instantText = Self.formattedForLog(instant)
         // Plans are not treated separately: a block from yesterday's or tomorrow's plan counts the same.
         let blocks = feed.plans.flatMap(\.blocks)
@@ -45,8 +45,8 @@ public enum Moment: Equatable, Sendable {
             return .waiting(text: next.task, start: next.start, end: next.end)
         }
 
-        log.info(.moment, "resolve at \(instantText): no block is current and none is still to come")
-        return nil
+        log.info(.moment, "resolve at \(instantText): no block is current and none is still to come; nothing left")
+        return .nothingLeft
     }
 
     /// The block whose range holds the instant. A block is current from its start up to, but not

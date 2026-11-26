@@ -67,11 +67,11 @@ struct IntegrationTests {
         let data = try Fixture.data("feed-2026-11-20")
         let recorder = LogRecorder()
         let log = recorder.log
-        let answers = try await withThrowingTaskGroup(of: Moment?.self) { group in
+        let answers = try await withThrowingTaskGroup(of: Moment.self) { group in
             for _ in 0..<50 {
                 group.addTask { try Moment.resolve(feedData: data, at: ny("2026-11-20 10:00"), log: log) }
             }
-            return try await group.reduce(into: [Moment?]()) { $0.append($1) }
+            return try await group.reduce(into: [Moment]()) { $0.append($1) }
         }
         #expect(answers.count == 50)
         #expect(answers.allSatisfy { $0 == .inBlock(text: "Task 1", end: ny("2026-11-20 10:30")) })

@@ -226,3 +226,52 @@ struct MomentWaitingTests {
         #expect(moment == .waiting(text: "Task 2", start: ny("2026-11-20 10:40"), end: ny("2026-11-20 11:10")))
     }
 }
+
+// Ticket #5: a fresh feed with no current or future block. Every instant here is within 26 hours of
+// the fixture's `generated_at` (06:00 on the feed's day), so the feed is not stale.
+
+@Suite("Moment: nothing left")
+struct MomentNothingLeftTests {
+    @Test("after the feed's last block, with no later plan, nothing is left", arguments: [
+        "2026-11-20 11:40", "2026-11-20 12:00", "2026-11-20 23:59",
+    ])
+    func afterLastBlock(at: String) throws {
+        // Nov 20: block 3 ends at 11:40 and no Nov 21 plan is in the feed.
+        let moment = try Moment.resolve(feedData: Fixture.data("feed-2026-11-20"), at: ny(at))
+        #expect(moment == .nothingLeft)
+    }
+
+    @Test("a feed with no plans at all gives nothing left")
+    func noPlans() throws {
+        let data = try Fixture.mutatedDays("feed-2026-11-20") { $0.removeAll() }
+        #expect(try Moment.resolve(feedData: data, at: ny("2026-11-20 10:00")) == .nothingLeft)
+    }
+
+    @Test("a feed whose plans have no blocks gives nothing left")
+    func noBlocks() throws {
+        let data = try Fixture.mutatedDays("feed-2026-11-20") { days in
+            for index in days.indices { days[index]["blocks"] = [[String: Any]]() }
+        }
+        #expect(try Moment.resolve(feedData: data, at: ny("2026-11-20 10:00")) == .nothingLeft)
+    }
+
+    @Test("today's plan with no blocks gives nothing left, not a separate \"no plan\" Moment")
+    func todayHasNoBlocks() throws {
+        // Nov 20 feed with today's plan emptied; yesterday's (Nov 19) blocks all ended by 20:30.
+        let data = try Fixture.mutatedDays("feed-2026-11-20") { days in
+            days[days.count - 1]["blocks"] = [[String: Any]]()
+        }
+        #expect(try Moment.resolve(feedData: data, at: ny("2026-11-20 10:00")) == .nothingLeft)
+    }
+
+    @Test("a block that can never be current does not keep the day open")
+    func invalidLastBlock() throws {
+        // Nov 20's last block (11:20 to 11:40) made to end before it starts: after 11:10 nothing is left.
+        let data = try Fixture.mutatedDays("feed-2026-11-20") { days in
+            var blocks = days[days.count - 1]["blocks"] as! [[String: Any]]
+            blocks[blocks.count - 1]["end"] = "2026-11-20T11:00:00-05:00"
+            days[days.count - 1]["blocks"] = blocks
+        }
+        #expect(try Moment.resolve(feedData: data, at: ny("2026-11-20 11:15")) == .nothingLeft)
+    }
+}
