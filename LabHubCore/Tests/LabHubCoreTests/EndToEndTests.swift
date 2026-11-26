@@ -81,6 +81,15 @@ struct CommandLineEndToEndTests {
         #expect(result.stdout == "nothing left\n")
     }
 
+    @Test("days later, with nothing left in a stale feed, it says it can't refresh")
+    func cantRefresh() throws {
+        let result = try CLI.run([CLI.fixturePath("feed-2026-11-20"), "--at", "2026-11-23T10:00:00-05:00"])
+        #expect(result.status == 0)
+        #expect(result.stdout.hasPrefix("can't refresh"))
+        #expect(result.stderr.contains("[WARNING] [moment]"))
+        #expect(result.stderr.contains("feed is stale"))
+    }
+
     @Test("an instant given in UTC gives the same answer as one given in New York time")
     func offsets() throws {
         let path = try CLI.fixturePath("feed-2026-11-20")
@@ -174,10 +183,12 @@ struct CommandLineEndToEndTests {
 private struct Oracle {
     struct Row { let start: Date; let end: Date; let task: String; let isBreak: Bool }
     let rows: [Row]
+    let generatedAt: Date
 
     init(fixture: String) throws {
         let json = try #require(JSONSerialization.jsonObject(with: Fixture.data(fixture)) as? [String: Any])
         let parse = ISO8601DateFormatter()
+        generatedAt = try #require(parse.date(from: json["generated_at"] as! String))
         rows = (json["days"] as! [[String: Any]]).flatMap { day in
             (day["blocks"] as! [[String: Any]]).map { block in
                 Row(start: parse.date(from: block["start"] as! String)!,
@@ -195,7 +206,11 @@ private struct Oracle {
 
         // Nothing current: the Next block is any block (of any plan) that starts soonest after the instant.
         let future = rows.filter { instant < $0.start && $0.start < $0.end }
-        guard let soonest = future.map(\.start).min() else { return [.nothingLeft] }
+        guard let soonest = future.map(\.start).min() else {
+            // Nothing to come: a feed built more than 26 hours ago can't claim nothing is left.
+            let stale = instant.timeIntervalSince(generatedAt) > 26 * 3600
+            return [stale ? .cantRefresh : .nothingLeft]
+        }
         return future.filter { $0.start == soonest }.map { Moment.waiting(text: $0.task, start: $0.start, end: $0.end) }
     }
 

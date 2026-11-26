@@ -58,6 +58,7 @@ do {
     case .inBreak(let text, let until): print("in a break: \(text) (until \(localTimeFormatter.string(from: until)))")
     case .waiting(let text, let start, _): print("waiting: next is \(text) at \(localTimeFormatter.string(from: start))")
     case .nothingLeft: print("nothing left")
+    case .cantRefresh: print("can't refresh: the feed is stale and has nothing current or still to come")
     }
 } catch {
     // The decoder has already logged exactly which field failed.

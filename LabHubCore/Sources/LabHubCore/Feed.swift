@@ -5,15 +5,33 @@ import Foundation
 /// The whole `feed.json`: one `Plan` per day.
 struct Feed: Decodable, Equatable, Sendable {
     let version: Int
+    /// When the Action built this feed. Required: without it the app can't tell a stale feed.
+    let generatedAt: Date
     let plans: [Plan]
 
     private enum CodingKeys: String, CodingKey {
         case version
+        case generatedAt = "generated_at"
         case plans = "days"
     }
 
     /// The schema version this decoder and the fixtures are written against (ADR 0004).
     static let supportedVersion = 1
+
+    /// How old a feed may be before it is stale (CONTEXT.md, Stale feed).
+    static let staleAfter: TimeInterval = 26 * 60 * 60
+
+    /// How long before `instant` the feed was built. Negative when `generated_at` is in the future
+    /// (the phone's clock is behind the server's).
+    func age(at instant: Date) -> TimeInterval {
+        instant.timeIntervalSince(generatedAt)
+    }
+
+    /// A stale feed was built more than 26 hours before the instant. Exactly 26 hours is not stale,
+    /// and neither is a feed built after the instant.
+    func isStale(at instant: Date) -> Bool {
+        age(at: instant) > Self.staleAfter
+    }
 
     /// Decodes feed bytes, logging what it found or exactly which field failed (never plan text).
     static func decode(_ data: Data, log: LabHubLog = .shared) throws -> Feed {
@@ -26,7 +44,7 @@ struct Feed: Decodable, Equatable, Sendable {
         do {
             let feed = try decoder.decode(Feed.self, from: data)
             let blockCount = feed.plans.reduce(0) { $0 + $1.blocks.count }
-            log.info(.feed, "feed decoded: version=\(feed.version) plans=\(feed.plans.count) blocks=\(blockCount) dates=\(feed.plans.map(\.date))")
+            log.info(.feed, "feed decoded: version=\(feed.version) plans=\(feed.plans.count) blocks=\(blockCount) dates=\(feed.plans.map(\.date)) generated_at=\(feed.generatedAt.formatted(.iso8601))")
             if feed.version > supportedVersion {
                 log.warning(.feed, "feed is schema version \(feed.version) but this build understands version \(supportedVersion); fields may be misread, update the app")
             }

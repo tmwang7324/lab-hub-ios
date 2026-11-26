@@ -275,3 +275,86 @@ struct MomentNothingLeftTests {
         #expect(try Moment.resolve(feedData: data, at: ny("2026-11-20 11:15")) == .nothingLeft)
     }
 }
+
+// Ticket #6: a stale feed (`generated_at` more than 26 hours before the instant) still shows its
+// blocks, but never claims nothing is left.
+
+@Suite("Moment: stale feed and can't refresh")
+struct MomentStaleFeedTests {
+    /// The Nov 20 fixture's `generated_at`: 06:00 New York time on Nov 20.
+    static let nov20GeneratedAt = ny("2026-11-20 06:00")
+
+    /// A fixture whose `generated_at` is replaced, so the same blocks can be read as fresh or stale.
+    private func generated(_ name: String, at text: String) throws -> Data {
+        try Fixture.mutated(name) { $0["generated_at"] = text }
+    }
+
+    @Test("a stale feed with a current work block resolves as in a block")
+    func staleInBlock() throws {
+        let data = try generated("feed-2026-11-20", at: "2026-11-18T06:00:00-05:00")
+        let moment = try Moment.resolve(feedData: data, at: ny("2026-11-20 10:00"))
+        #expect(moment == .inBlock(text: "Task 1", end: ny("2026-11-20 10:30")))
+    }
+
+    @Test("a stale feed with a current break resolves as in a break")
+    func staleInBreak() throws {
+        let data = try generated("feed-2026-11-10", at: "2026-11-08T06:00:00-05:00")
+        let moment = try Moment.resolve(feedData: data, at: ny("2026-11-10 13:30"))
+        #expect(moment == .inBreak(text: "Break 4", end: ny("2026-11-10 13:55")))
+    }
+
+    @Test("a stale feed with a future block resolves as waiting")
+    func staleWaiting() throws {
+        let data = try generated("feed-2026-11-20", at: "2026-11-18T06:00:00-05:00")
+        let moment = try Moment.resolve(feedData: data, at: ny("2026-11-20 10:35"))
+        #expect(moment == .waiting(text: "Task 2", start: ny("2026-11-20 10:40"), end: ny("2026-11-20 11:10")))
+    }
+
+    @Test("a stale feed with nothing current or to come can't refresh", arguments: [
+        "2026-11-21 08:01", "2026-11-22 12:00", "2026-12-20 12:00",
+    ])
+    func staleNothingLeft(at: String) throws {
+        // Nov 20 fixture: the last block ends 11:40 on Nov 20; the feed is stale after 08:00 on Nov 21.
+        let moment = try Moment.resolve(feedData: Fixture.data("feed-2026-11-20"), at: ny(at))
+        #expect(moment == .cantRefresh)
+    }
+
+    @Test("a stale feed with no blocks at all can't refresh")
+    func staleEmptyFeed() throws {
+        let data = try Fixture.mutated("feed-2026-11-20") { json in
+            json["days"] = [[String: Any]]()
+            json["generated_at"] = "2026-11-18T06:00:00-05:00"
+        }
+        #expect(try Moment.resolve(feedData: data, at: ny("2026-11-20 10:00")) == .cantRefresh)
+    }
+
+    @Test("a feed exactly 26 hours old is not stale")
+    func exactly26Hours() throws {
+        let instant = Self.nov20GeneratedAt.addingTimeInterval(26 * 3600)
+        let moment = try Moment.resolve(feedData: Fixture.data("feed-2026-11-20"), at: instant)
+        #expect(moment == .nothingLeft)
+    }
+
+    @Test("one second past 26 hours the feed is stale")
+    func justPast26Hours() throws {
+        let instant = Self.nov20GeneratedAt.addingTimeInterval(26 * 3600 + 1)
+        let moment = try Moment.resolve(feedData: Fixture.data("feed-2026-11-20"), at: instant)
+        #expect(moment == .cantRefresh)
+    }
+
+    @Test("a feed generated in the future is not stale")
+    func generatedInFuture() throws {
+        // The phone's clock is behind the server's: `generated_at` is after the instant.
+        let data = try generated("feed-2026-11-20", at: "2026-11-25T06:00:00-05:00")
+        #expect(try Moment.resolve(feedData: data, at: ny("2026-11-20 12:00")) == .nothingLeft)
+    }
+
+    @Test("staleness compares absolute instants, whatever offset `generated_at` is written with")
+    func generatedAtOffset() throws {
+        // 11:00 UTC is 06:00 in New York: the same instant as the fixture's own `generated_at`.
+        let data = try generated("feed-2026-11-20", at: "2026-11-20T11:00:00Z")
+        let instant = Self.nov20GeneratedAt.addingTimeInterval(26 * 3600)
+        #expect(try Moment.resolve(feedData: data, at: instant) == .nothingLeft)
+        #expect(try Moment.resolve(feedData: data, at: instant.addingTimeInterval(1)) == .cantRefresh)
+    }
+}

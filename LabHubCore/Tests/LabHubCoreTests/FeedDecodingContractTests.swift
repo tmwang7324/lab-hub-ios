@@ -72,6 +72,26 @@ struct FeedDecodingContractTests {
         #expect(throws: (any Error).self) { try Feed.decode(data) }
     }
 
+    // MARK: generated_at
+
+    @Test("`generated_at` decodes as an absolute instant")
+    func generatedAt() throws {
+        let feed = try Feed.decode(Fixture.data("feed-2026-11-20"))
+        #expect(feed.generatedAt == ny("2026-11-20 06:00"))
+    }
+
+    @Test("a feed missing `generated_at` throws, because staleness can't be judged without it")
+    func missingGeneratedAt() throws {
+        let data = try Fixture.mutated("feed-2026-11-20") { $0["generated_at"] = nil }
+        #expect(throws: (any Error).self) { try Feed.decode(data) }
+    }
+
+    @Test("an unreadable `generated_at` throws", arguments: ["yesterday", "2026-11-20 06:00"])
+    func badGeneratedAt(value: String) throws {
+        let data = try Fixture.mutated("feed-2026-11-20") { $0["generated_at"] = value }
+        #expect(throws: (any Error).self) { try Feed.decode(data) }
+    }
+
     @Test("an unknown block kind throws")
     func unknownKind() throws {
         let data = try Fixture.mutatedFirstBlock("feed-2026-11-20") { $0["kind"] = "meeting" }

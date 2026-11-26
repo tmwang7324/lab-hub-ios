@@ -18,6 +18,10 @@ public enum Moment: Equatable, Sendable {
     /// No block is current or still to come (CONTEXT.md, Nothing left). It covers both "done for
     /// today" and "no plan today".
     case nothingLeft
+    /// The feed is stale and has no current or future block. A stale feed never claims nothing is
+    /// left, because the phone may simply have failed to fetch today's plan: the surface should send
+    /// the user to the app instead.
+    case cantRefresh
 
     /// The one entry point: feed bytes plus an instant give the Moment.
     ///
@@ -32,6 +36,13 @@ public enum Moment: Equatable, Sendable {
         // Plans are not treated separately: a block from yesterday's or tomorrow's plan counts the same.
         let blocks = feed.plans.flatMap(\.blocks)
 
+        // A stale feed still shows its blocks; it only changes what "nothing left" becomes.
+        let isStale = feed.isStale(at: instant)
+        if isStale {
+            let hours = Int(feed.age(at: instant) / 3600)
+            log.warning(.moment, "resolve at \(instantText): feed is stale, generated \(Self.formattedForLog(feed.generatedAt)) (\(hours)h ago, limit \(Int(Feed.staleAfter / 3600))h)")
+        }
+
         if let block = currentBlock(in: blocks, at: instant, instantText: instantText, log: log) {
             log.info(.moment, "resolve at \(instantText): in \(block.kind.rawValue) block \(block.id) until \(Self.formattedForLog(block.end))")
             switch block.kind {
@@ -45,6 +56,10 @@ public enum Moment: Equatable, Sendable {
             return .waiting(text: next.task, start: next.start, end: next.end)
         }
 
+        if isStale {
+            log.info(.moment, "resolve at \(instantText): no block is current and none is still to come, and the feed is stale; can't refresh")
+            return .cantRefresh
+        }
         log.info(.moment, "resolve at \(instantText): no block is current and none is still to come; nothing left")
         return .nothingLeft
     }

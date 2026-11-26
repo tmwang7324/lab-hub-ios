@@ -102,6 +102,25 @@ struct MomentDiagnosticsTests {
         #expect(!line.contains("Task 2"))
     }
 
+    @Test("a stale feed is a warning that says how old it is")
+    func staleWarns() throws {
+        // Nov 20 fixture, generated 06:00 Nov 20, read 30 hours later.
+        let recorder = LogRecorder()
+        _ = try Moment.resolve(feedData: Fixture.data("feed-2026-11-20"), at: ny("2026-11-21 12:00"), log: recorder.log)
+
+        let line = try #require(recorder.messages(.warning, .moment).first)
+        #expect(line.contains("stale"))
+        #expect(line.contains("30h"))
+        #expect(recorder.messages(.info, .moment).first?.contains("can't refresh") == true)
+    }
+
+    @Test("a fresh feed raises no stale warning")
+    func freshIsQuiet() throws {
+        let recorder = LogRecorder()
+        _ = try Moment.resolve(feedData: Fixture.data("feed-2026-11-20"), at: ny("2026-11-20 12:00"), log: recorder.log)
+        #expect(recorder.messages(.warning).isEmpty)
+    }
+
     @Test("blocks that overlap are a warning that names both ids")
     func overlapWarns() throws {
         // Nov 9 plan: blocks 5 and 6 overlap between 21:40 and 23:10.
