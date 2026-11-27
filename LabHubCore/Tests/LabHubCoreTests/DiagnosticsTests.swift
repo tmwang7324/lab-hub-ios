@@ -121,6 +121,18 @@ struct MomentDiagnosticsTests {
         #expect(recorder.messages(.warning).isEmpty)
     }
 
+    @Test("a private block is logged by id and marked private, never by its text")
+    func logsPrivateBlock() throws {
+        let data = try Fixture.mutatedBlock("feed-2026-11-20", "2026-11-20", row: 1) { $0["private"] = true }
+        let recorder = LogRecorder()
+        _ = try Moment.resolve(feedData: data, at: ny("2026-11-20 09:00"), log: recorder.log)
+        _ = try Moment.resolve(feedData: data, at: ny("2026-11-20 10:00"), log: recorder.log)
+
+        let lines = recorder.messages(.info, .moment)
+        #expect(lines.count == 2)
+        #expect(lines.allSatisfy { $0.contains("2026-11-20#1 (private)") && !$0.contains("Task 1") })
+    }
+
     @Test("blocks that overlap are a warning that names both ids")
     func overlapWarns() throws {
         // Nov 9 plan: blocks 5 and 6 overlap between 21:40 and 23:10.

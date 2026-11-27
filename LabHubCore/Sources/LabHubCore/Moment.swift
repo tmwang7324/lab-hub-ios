@@ -4,10 +4,9 @@ import Foundation
 
 /// What the lock screen shows at one instant.
 ///
-/// `text` is the display text for the surface to show.
-///
-/// WARNING: until ticket #7 lands, `text` is the block's task verbatim, even for a private block
-/// (`isPrivate`). Don't put a `Moment` on a surface that shows without unlocking before then.
+/// `text` is the lock screen text for the block the Moment names. For a private block it is always
+/// `Moment.busyText`, never the task, so any surface (widget, Live Activity, app) can show a Moment
+/// without unlocking and leak nothing. The private rule lives here and nowhere else (ADR 0003).
 public enum Moment: Equatable, Sendable {
     /// Inside a work block.
     case inBlock(text: String, end: Date)
@@ -22,6 +21,9 @@ public enum Moment: Equatable, Sendable {
     /// left, because the phone may simply have failed to fetch today's plan: the surface should send
     /// the user to the app instead.
     case cantRefresh
+
+    /// What a private block shows instead of its task (CONTEXT.md, Private block).
+    public static let busyText = "Busy"
 
     /// The one entry point: feed bytes plus an instant give the Moment.
     ///
@@ -44,16 +46,16 @@ public enum Moment: Equatable, Sendable {
         }
 
         if let block = currentBlock(in: blocks, at: instant, instantText: instantText, log: log) {
-            log.info(.moment, "resolve at \(instantText): in \(block.kind.rawValue) block \(block.id) until \(Self.formattedForLog(block.end))")
+            log.info(.moment, "resolve at \(instantText): in \(block.kind.rawValue) block \(block.id)\(Self.privateNote(block)) until \(Self.formattedForLog(block.end))")
             switch block.kind {
-            case .work: return .inBlock(text: block.task, end: block.end)
-            case .break: return .inBreak(text: block.task, end: block.end)
+            case .work: return .inBlock(text: displayText(for: block), end: block.end)
+            case .break: return .inBreak(text: displayText(for: block), end: block.end)
             }
         }
 
         if let next = nextBlock(in: blocks, after: instant) {
-            log.info(.moment, "resolve at \(instantText): no block is current; waiting for \(next.id) at \(Self.formattedForLog(next.start))")
-            return .waiting(text: next.task, start: next.start, end: next.end)
+            log.info(.moment, "resolve at \(instantText): no block is current; waiting for \(next.id)\(Self.privateNote(next)) at \(Self.formattedForLog(next.start))")
+            return .waiting(text: displayText(for: next), start: next.start, end: next.end)
         }
 
         if isStale {
@@ -62,6 +64,17 @@ public enum Moment: Equatable, Sendable {
         }
         log.info(.moment, "resolve at \(instantText): no block is current and none is still to come; nothing left")
         return .nothingLeft
+    }
+
+    /// The lock screen text for a block: its task, or "Busy" if it is private. Every Moment that names
+    /// a block gets its text from here, so no path can skip the private rule.
+    private static func displayText(for block: Block) -> String {
+        block.isPrivate ? busyText : block.task
+    }
+
+    /// Marks a private block in the log, so "why does it say Busy?" has an answer there.
+    private static func privateNote(_ block: Block) -> String {
+        block.isPrivate ? " (private)" : ""
     }
 
     /// The block whose range holds the instant. A block is current from its start up to, but not

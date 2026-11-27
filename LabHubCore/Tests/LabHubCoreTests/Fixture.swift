@@ -48,4 +48,16 @@ extension Fixture {
             json["days"] = days
         }
     }
+
+    /// Edits one block, named the way its id is (`date#row`): `mutatedBlock(name, "2026-11-10", row: 4)`.
+    static func mutatedBlock(_ name: String, _ date: String, row: Int,
+                             _ edit: @escaping (inout [String: Any]) -> Void) throws -> Data {
+        try mutatedDays(name) { days in
+            let day = days.firstIndex { $0["date"] as? String == date }!
+            var blocks = days[day]["blocks"] as! [[String: Any]]
+            let index = blocks.firstIndex { $0["row"] as? Int == row }!
+            edit(&blocks[index])
+            days[day]["blocks"] = blocks
+        }
+    }
 }

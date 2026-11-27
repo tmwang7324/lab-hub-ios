@@ -2,7 +2,7 @@
 //
 //   swift run labhub-moment <feed.json> [--at 2026-11-20T10:00:00-05:00] [--quiet]
 //
-// stdout: one line with the answer. This is a developer tool: it prints the real task text, private or not.
+// stdout: one line with the answer, exactly the text the lock screen would show: a private block prints as "Busy".
 // stderr: the log (what was decoded, which block, what went wrong). It never has plan text.
 // Exit codes: 0 answered, 1 failed (unreadable or invalid feed), 2 bad command line.
 

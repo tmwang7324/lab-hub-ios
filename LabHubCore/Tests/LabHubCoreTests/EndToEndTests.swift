@@ -113,6 +113,22 @@ struct CommandLineEndToEndTests {
         #expect(!result.stderr.contains("Task 1"))
     }
 
+    @Test("a private block prints as Busy, and its task appears nowhere in the output")
+    func privateBlockIsBusy() throws {
+        let data = try Fixture.mutatedBlock("feed-2026-11-20", "2026-11-20", row: 1) { $0["private"] = true }
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("labhub-\(UUID().uuidString).json")
+        try data.write(to: file)
+        defer { try? FileManager.default.removeItem(at: file) }
+
+        let result = try CLI.run([file.path, "--at", "2026-11-20T10:00:00-05:00"])
+
+        #expect(result.status == 0)
+        #expect(result.stdout.hasPrefix("in a block: Busy (until "))
+        #expect(!result.stdout.contains("Task 1"))
+        #expect(!result.stderr.contains("Task 1"))
+        #expect(result.stderr.contains("2026-11-20#1 (private)"))
+    }
+
     @Test("--quiet silences the log on success")
     func quiet() throws {
         let result = try CLI.run([CLI.fixturePath("feed-2026-11-20"), "--at", "2026-11-20T10:00:00-05:00", "--quiet"])
@@ -193,7 +209,8 @@ private struct Oracle {
             (day["blocks"] as! [[String: Any]]).map { block in
                 Row(start: parse.date(from: block["start"] as! String)!,
                     end: parse.date(from: block["end"] as! String)!,
-                    task: block["task"] as! String,
+                    // What the lock screen may show: a private block's task never appears.
+                    task: (block["private"] as? Bool == true) ? "Busy" : block["task"] as! String,
                     isBreak: (block["kind"] as! String) == "break")
             }
         }

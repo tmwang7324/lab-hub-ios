@@ -358,3 +358,85 @@ struct MomentStaleFeedTests {
         #expect(try Moment.resolve(feedData: data, at: instant.addingTimeInterval(1)) == .cantRefresh)
     }
 }
+
+// Ticket #7: a private block shows only "Busy" and its times, whether current or next (ADR 0003).
+// The shipped fixtures predate `private`, so each test marks one block private.
+
+@Suite("Moment: private blocks show as Busy")
+struct MomentPrivateBlockTests {
+    private func privateBlock(_ name: String, _ date: String, row: Int) throws -> Data {
+        try Fixture.mutatedBlock(name, date, row: row) { $0["private"] = true }
+    }
+
+    @Test("a private current block shows Busy and its end, with no task text in the result")
+    func privateCurrent() throws {
+        let data = try privateBlock("feed-2026-11-20", "2026-11-20", row: 1)
+        let moment = try Moment.resolve(feedData: data, at: ny("2026-11-20 10:00"))
+        #expect(moment == .inBlock(text: "Busy", end: ny("2026-11-20 10:30")))
+        #expect(!String(describing: moment).contains("Task 1"))
+    }
+
+    @Test("a private Next block shows Busy in the waiting Moment")
+    func privateNext() throws {
+        let data = try privateBlock("feed-2026-11-20", "2026-11-20", row: 2)
+        let moment = try Moment.resolve(feedData: data, at: ny("2026-11-20 10:35"))
+        #expect(moment == .waiting(text: "Busy", start: ny("2026-11-20 10:40"), end: ny("2026-11-20 11:10")))
+        #expect(!String(describing: moment).contains("Task 2"))
+    }
+
+    @Test("a private break shows Busy and is still a break")
+    func privateBreak() throws {
+        let data = try privateBlock("feed-2026-11-10", "2026-11-10", row: 4)
+        let moment = try Moment.resolve(feedData: data, at: ny("2026-11-10 13:30"))
+        #expect(moment == .inBreak(text: "Busy", end: ny("2026-11-10 13:55")))
+    }
+
+    @Test("a private block that crosses midnight shows Busy on both sides of midnight", arguments: [
+        "2026-11-10 23:45", "2026-11-11 00:15",
+    ])
+    func privateAfterMidnight(at: String) throws {
+        let data = try privateBlock("feed-2026-11-10", "2026-11-10", row: 11)
+        let moment = try Moment.resolve(feedData: data, at: ny(at))
+        #expect(moment == .inBlock(text: "Busy", end: ny("2026-11-11 00:30")))
+    }
+
+    @Test("a private late block from yesterday's plan shows Busy")
+    func privateYesterday() throws {
+        let data = try privateBlock("feed-2026-11-10", "2026-11-09", row: 7)
+        let moment = try Moment.resolve(feedData: data, at: ny("2026-11-10 00:30"))
+        #expect(moment == .inBlock(text: "Busy", end: ny("2026-11-10 00:50")))
+    }
+
+    @Test("a private block in a stale feed still shows Busy")
+    func privateInStaleFeed() throws {
+        let data = try Fixture.mutated("feed-2026-11-20") { json in
+            json["generated_at"] = "2026-11-18T06:00:00-05:00"
+            var days = json["days"] as! [[String: Any]]
+            var blocks = days[1]["blocks"] as! [[String: Any]]
+            blocks[0]["private"] = true
+            days[1]["blocks"] = blocks
+            json["days"] = days
+        }
+        let moment = try Moment.resolve(feedData: data, at: ny("2026-11-20 10:00"))
+        #expect(moment == .inBlock(text: "Busy", end: ny("2026-11-20 10:30")))
+    }
+
+    @Test("a block marked `private: false`, or with no `private`, shows its task text")
+    func notPrivate() throws {
+        let explicit = try Fixture.mutatedBlock("feed-2026-11-20", "2026-11-20", row: 1) { $0["private"] = false }
+        let expected = Moment.inBlock(text: "Task 1", end: ny("2026-11-20 10:30"))
+        #expect(try Moment.resolve(feedData: explicit, at: ny("2026-11-20 10:00")) == expected)
+        #expect(try Moment.resolve(feedData: Fixture.data("feed-2026-11-20"), at: ny("2026-11-20 10:00")) == expected)
+    }
+
+    @Test("only the private block is hidden: the blocks around it keep their text")
+    func onlyThePrivateBlockIsHidden() throws {
+        let data = try privateBlock("feed-2026-11-20", "2026-11-20", row: 1)
+        #expect(try Moment.resolve(feedData: data, at: ny("2026-11-20 09:00"))
+                == .waiting(text: "Busy", start: ny("2026-11-20 09:30"), end: ny("2026-11-20 10:30")))
+        #expect(try Moment.resolve(feedData: data, at: ny("2026-11-20 10:35"))
+                == .waiting(text: "Task 2", start: ny("2026-11-20 10:40"), end: ny("2026-11-20 11:10")))
+        #expect(try Moment.resolve(feedData: data, at: ny("2026-11-20 10:45"))
+                == .inBlock(text: "Task 2", end: ny("2026-11-20 11:10")))
+    }
+}
