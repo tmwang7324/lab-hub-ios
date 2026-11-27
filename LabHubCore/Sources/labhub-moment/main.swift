@@ -53,10 +53,11 @@ do {
 do {
     let localTimeFormatter = ISO8601DateFormatter()
     localTimeFormatter.timeZone = .current
+    let staleNote = { (isStale: Bool) in isStale ? " [stale feed]" : "" }
     switch try Moment.resolve(feedData: data, at: instant, log: log) {
-    case .inBlock(let text, let until): print("in a block: \(text) (until \(localTimeFormatter.string(from: until)))")
-    case .inBreak(let text, let until): print("in a break: \(text) (until \(localTimeFormatter.string(from: until)))")
-    case .waiting(let text, let start, _): print("waiting: next is \(text) at \(localTimeFormatter.string(from: start))")
+    case .inBlock(let text, let until, let isStale): print("in a block: \(text) (until \(localTimeFormatter.string(from: until)))\(staleNote(isStale))")
+    case .inBreak(let text, let until, let isStale): print("in a break: \(text) (until \(localTimeFormatter.string(from: until)))\(staleNote(isStale))")
+    case .waiting(let text, let start, _, let isStale): print("waiting: next is \(text) at \(localTimeFormatter.string(from: start))\(staleNote(isStale))")
     case .nothingLeft: print("nothing left")
     case .cantRefresh: print("can't refresh: the feed is stale and has nothing current or still to come")
     }

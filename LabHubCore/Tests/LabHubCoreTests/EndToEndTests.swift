@@ -90,6 +90,22 @@ struct CommandLineEndToEndTests {
         #expect(result.stderr.contains("feed is stale"))
     }
 
+    @Test("a block from a stale feed is flagged on stdout, and one from a fresh feed is not")
+    func staleBlockIsFlagged() throws {
+        let data = try Fixture.mutated("feed-2026-11-20") { $0["generated_at"] = "2026-11-18T06:00:00-05:00" }
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("labhub-\(UUID().uuidString).json")
+        try data.write(to: file)
+        defer { try? FileManager.default.removeItem(at: file) }
+
+        let stale = try CLI.run([file.path, "--at", "2026-11-20T10:00:00-05:00"])
+        let fresh = try CLI.run([CLI.fixturePath("feed-2026-11-20"), "--at", "2026-11-20T10:00:00-05:00"])
+
+        #expect(stale.status == 0)
+        #expect(stale.stdout.hasPrefix("in a block: Task 1 (until "))
+        #expect(stale.stdout.hasSuffix(" [stale feed]\n"))
+        #expect(!fresh.stdout.contains("stale"))
+    }
+
     @Test("an instant given in UTC gives the same answer as one given in New York time")
     func offsets() throws {
         let path = try CLI.fixturePath("feed-2026-11-20")
@@ -217,18 +233,19 @@ private struct Oracle {
     }
 
     func acceptable(at instant: Date) -> [Moment] {
+        // A feed built more than 26 hours before the instant is stale: its blocks are marked, and it
+        // can't say nothing is left.
+        let stale = instant.timeIntervalSince(generatedAt) > 26 * 3600
         let current = rows.filter { $0.start <= instant && instant < $0.end }
-            .map { $0.isBreak ? Moment.inBreak(text: $0.displayText, end: $0.end) : .inBlock(text: $0.displayText, end: $0.end) }
+            .map { $0.isBreak ? Moment.inBreak(text: $0.displayText, end: $0.end, isStale: stale)
+                              : .inBlock(text: $0.displayText, end: $0.end, isStale: stale) }
         if !current.isEmpty { return current }
 
         // Nothing current: the Next block is any block (of any plan) that starts soonest after the instant.
         let future = rows.filter { instant < $0.start && $0.start < $0.end }
-        guard let soonest = future.map(\.start).min() else {
-            // Nothing to come: a feed built more than 26 hours ago can't claim nothing is left.
-            let stale = instant.timeIntervalSince(generatedAt) > 26 * 3600
-            return [stale ? .cantRefresh : .nothingLeft]
-        }
-        return future.filter { $0.start == soonest }.map { Moment.waiting(text: $0.displayText, start: $0.start, end: $0.end) }
+        guard let soonest = future.map(\.start).min() else { return [stale ? .cantRefresh : .nothingLeft] }
+        return future.filter { $0.start == soonest }
+            .map { Moment.waiting(text: $0.displayText, start: $0.start, end: $0.end, isStale: stale) }
     }
 
     /// Every block edge, with one second either side: where mistakes hide.

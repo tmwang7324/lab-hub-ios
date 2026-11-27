@@ -85,7 +85,8 @@ struct MomentCurrentBlockTests {
     func tomorrowsBlock() throws {
         // Nov 10 feed also holds the Nov 11 plan: block 1 runs 13:00 to 14:00.
         let moment = try Moment.resolve(feedData: Fixture.data("feed-2026-11-10"), at: ny("2026-11-11 13:30"))
-        #expect(moment == .inBlock(text: "Task 1", end: ny("2026-11-11 14:00")))
+        // 13:30 on Nov 11 is 31.5 hours after the feed was built, so the block is marked stale.
+        #expect(moment == .inBlock(text: "Task 1", end: ny("2026-11-11 14:00"), isStale: true))
     }
 
     // MARK: status and bad input
@@ -120,7 +121,7 @@ struct MomentCurrentBlockTests {
         // Start 09:30, end 09:00: no instant can be inside it.
         let data = try Fixture.mutatedFirstBlock("feed-2026-11-20") { $0["end"] = "2026-11-20T09:00:00-05:00" }
         let moment = try Moment.resolve(feedData: data, at: ny(at))
-        if case .inBlock(let text, _) = moment { #expect(text != "Task 1") }
+        if case .inBlock(let text, _, _) = moment { #expect(text != "Task 1") }
     }
 
     @Test("overlapping blocks do not crash the resolver")
@@ -283,21 +284,21 @@ struct MomentStaleFeedTests {
     func staleInBlock() throws {
         let data = try generated("feed-2026-11-20", at: "2026-11-18T06:00:00-05:00")
         let moment = try Moment.resolve(feedData: data, at: ny("2026-11-20 10:00"))
-        #expect(moment == .inBlock(text: "Task 1", end: ny("2026-11-20 10:30")))
+        #expect(moment == .inBlock(text: "Task 1", end: ny("2026-11-20 10:30"), isStale: true))
     }
 
     @Test("a stale feed with a current break resolves as in a break")
     func staleInBreak() throws {
         let data = try generated("feed-2026-11-10", at: "2026-11-08T06:00:00-05:00")
         let moment = try Moment.resolve(feedData: data, at: ny("2026-11-10 13:30"))
-        #expect(moment == .inBreak(text: "Break 4", end: ny("2026-11-10 13:55")))
+        #expect(moment == .inBreak(text: "Break 4", end: ny("2026-11-10 13:55"), isStale: true))
     }
 
     @Test("a stale feed with a future block resolves as waiting")
     func staleWaiting() throws {
         let data = try generated("feed-2026-11-20", at: "2026-11-18T06:00:00-05:00")
         let moment = try Moment.resolve(feedData: data, at: ny("2026-11-20 10:35"))
-        #expect(moment == .waiting(text: "Task 2", start: ny("2026-11-20 10:40"), end: ny("2026-11-20 11:10")))
+        #expect(moment == .waiting(text: "Task 2", start: ny("2026-11-20 10:40"), end: ny("2026-11-20 11:10"), isStale: true))
     }
 
     @Test("a stale feed with nothing current or to come can't refresh", arguments: [
@@ -337,6 +338,44 @@ struct MomentStaleFeedTests {
         // The phone's clock is behind the server's: `generated_at` is after the instant.
         let data = try generated("feed-2026-11-20", at: "2026-11-25T06:00:00-05:00")
         #expect(try Moment.resolve(feedData: data, at: ny("2026-11-20 12:00")) == .nothingLeft)
+    }
+
+    // MARK: the stale mark on blocks
+
+    @Test("on a fresh feed no block is marked stale")
+    func freshBlocksAreNotMarkedStale() throws {
+        let nov20 = try Fixture.data("feed-2026-11-20")
+        #expect(try Moment.resolve(feedData: nov20, at: ny("2026-11-20 10:00"))
+                == .inBlock(text: "Task 1", end: ny("2026-11-20 10:30"), isStale: false))
+        #expect(try Moment.resolve(feedData: nov20, at: ny("2026-11-20 10:35"))
+                == .waiting(text: "Task 2", start: ny("2026-11-20 10:40"), end: ny("2026-11-20 11:10"), isStale: false))
+        #expect(try Moment.resolve(feedData: Fixture.data("feed-2026-11-10"), at: ny("2026-11-10 13:30"))
+                == .inBreak(text: "Break 4", end: ny("2026-11-10 13:55"), isStale: false))
+    }
+
+    @Test("a block is marked stale exactly when the feed is more than 26 hours old")
+    func staleMarkFollowsTheBoundary() throws {
+        // Nov 20 block 1 runs 09:30 to 10:30; read at 10:00, so `generated_at` alone sets the feed's age.
+        let exactly26h = try generated("feed-2026-11-20", at: "2026-11-19T08:00:00-05:00")
+        let justOver = try generated("feed-2026-11-20", at: "2026-11-19T07:59:59-05:00")
+        let inTheFuture = try generated("feed-2026-11-20", at: "2026-11-25T06:00:00-05:00")
+        let end = ny("2026-11-20 10:30")
+
+        #expect(try Moment.resolve(feedData: exactly26h, at: ny("2026-11-20 10:00")) == .inBlock(text: "Task 1", end: end, isStale: false))
+        #expect(try Moment.resolve(feedData: justOver, at: ny("2026-11-20 10:00")) == .inBlock(text: "Task 1", end: end, isStale: true))
+        #expect(try Moment.resolve(feedData: inTheFuture, at: ny("2026-11-20 10:00")) == .inBlock(text: "Task 1", end: end, isStale: false))
+    }
+
+    @Test("the stale mark does not change which block is shown or its text")
+    func staleMarkChangesNothingElse() throws {
+        let fresh = try Moment.resolve(feedData: Fixture.data("feed-2026-11-20"), at: ny("2026-11-20 10:35"))
+        let stale = try Moment.resolve(feedData: generated("feed-2026-11-20", at: "2026-11-18T06:00:00-05:00"), at: ny("2026-11-20 10:35"))
+        guard case .waiting(let freshText, let freshStart, let freshEnd, false) = fresh,
+              case .waiting(let staleText, let staleStart, let staleEnd, true) = stale else {
+            Issue.record("expected a fresh and a stale waiting Moment, got \(fresh) and \(stale)")
+            return
+        }
+        #expect((freshText, freshStart, freshEnd) == (staleText, staleStart, staleEnd))
     }
 
     @Test("staleness compares absolute instants, whatever offset `generated_at` is written with")
@@ -399,7 +438,7 @@ struct MomentPrivateBlockTests {
             $0["generated_at"] = "2026-11-18T06:00:00-05:00"
         }
         let moment = try Moment.resolve(feedData: data, at: ny("2026-11-20 10:00"))
-        #expect(moment == .inBlock(text: "Busy", end: ny("2026-11-20 10:30")))
+        #expect(moment == .inBlock(text: "Busy", end: ny("2026-11-20 10:30"), isStale: true))
     }
 
     @Test("a block marked `private: false`, or with no `private`, shows its task text")

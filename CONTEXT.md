@@ -9,7 +9,7 @@ The `feed.json` file the Action builds. It covers whichever of yesterday's, toda
 _Avoid_: data, JSON, schedule
 
 **Stale feed**:
-A feed whose `generated_at` is more than 26 hours old. Its blocks still show, but it never claims nothing is left.
+A feed whose `generated_at` is more than 26 hours old. Its blocks still show, each marked stale in the Moment so a surface can say it may be out of date, but it never claims nothing is left.
 _Avoid_: old data, expired feed
 
 **Feed-changed push**:
@@ -41,7 +41,7 @@ A work block still marked planned an hour after it ended, because you never resp
 _Avoid_: stale block, expired block, dropped block
 
 **Moment**:
-What the lock screen shows at a given instant: in a block, in a break, waiting for the next block, nothing left, or can't refresh.
+What the lock screen shows at a given instant: in a block, in a break, waiting for the next block, nothing left, or can't refresh. The three that show a block also say whether the feed is stale. Nothing left only comes from a fresh feed; a stale one gives can't refresh instead.
 _Avoid_: state, status (status is a block's own outcome)
 
 **Next block**:

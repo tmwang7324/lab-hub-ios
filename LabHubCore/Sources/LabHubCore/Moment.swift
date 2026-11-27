@@ -8,14 +8,17 @@ import Foundation
 /// `Moment.busyText`, never the task, so any surface (widget, Live Activity, app) can show a Moment
 /// without unlocking and leak nothing. The private rule lives here and nowhere else (ADR 0003).
 public enum Moment: Equatable, Sendable {
-    /// Inside a work block.
-    case inBlock(text: String, end: Date)
-    /// Inside a break.
-    case inBreak(text: String, end: Date)
+    /// Inside a work block. `isStale` says the feed it came from is stale (CONTEXT.md, Stale feed):
+    /// the block still shows, but a surface may mark it as possibly out of date. It defaults to
+    /// `false` so a fresh Moment reads naturally; `resolve` always sets it.
+    case inBlock(text: String, end: Date, isStale: Bool = false)
+    /// Inside a break. `isStale` as for `inBlock`.
+    case inBreak(text: String, end: Date, isStale: Bool = false)
     /// No block is current, but one is still to come: the Next block (CONTEXT.md), with its times.
-    case waiting(text: String, start: Date, end: Date)
+    /// `isStale` as for `inBlock`.
+    case waiting(text: String, start: Date, end: Date, isStale: Bool = false)
     /// No block is current or still to come (CONTEXT.md, Nothing left). It covers both "done for
-    /// today" and "no plan today".
+    /// today" and "no plan today". Only a fresh feed gives it; a stale feed gives `cantRefresh`.
     case nothingLeft
     /// The feed is stale and has no current or future block. A stale feed never claims nothing is
     /// left, because the phone may simply have failed to fetch today's plan: the surface should send
@@ -39,7 +42,7 @@ public enum Moment: Equatable, Sendable {
         // Plans are not treated separately: a block from yesterday's or tomorrow's plan counts the same.
         let blocks = feed.plans.flatMap(\.blocks)
 
-        // A stale feed still shows its blocks; it only changes what "nothing left" becomes.
+        // A stale feed still shows its blocks, marked stale; it also changes what "nothing left" becomes.
         let isStale = feed.isStale(at: instant)
         if isStale {
             let hours = Int(feed.age(at: instant) / 3600)
@@ -49,14 +52,14 @@ public enum Moment: Equatable, Sendable {
         if let block = currentBlock(in: blocks, at: instant, instantText: instantText, log: log) {
             log.info(.moment, "resolve at \(instantText): in \(block.kind.rawValue) block \(block.id)\(Self.privateNote(block)) until \(Self.formattedForLog(block.end))")
             switch block.kind {
-            case .work: return .inBlock(text: displayText(for: block), end: block.end)
-            case .break: return .inBreak(text: displayText(for: block), end: block.end)
+            case .work: return .inBlock(text: displayText(for: block), end: block.end, isStale: isStale)
+            case .break: return .inBreak(text: displayText(for: block), end: block.end, isStale: isStale)
             }
         }
 
         if let next = nextBlock(in: blocks, after: instant) {
             log.info(.moment, "resolve at \(instantText): no block is current; waiting for \(next.id)\(Self.privateNote(next)) at \(Self.formattedForLog(next.start))")
-            return .waiting(text: displayText(for: next), start: next.start, end: next.end)
+            return .waiting(text: displayText(for: next), start: next.start, end: next.end, isStale: isStale)
         }
 
         if isStale {
