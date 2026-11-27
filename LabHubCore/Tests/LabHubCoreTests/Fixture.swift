@@ -22,7 +22,13 @@ extension Fixture {
     /// A fixture with a change applied to its parsed JSON, so tests start from a real feed shape
     /// (ADR 0004) instead of hand-written JSON. The closure edits the top-level dictionary in place.
     static func mutated(_ name: String, _ edit: (inout [String: Any]) -> Void) throws -> Data {
-        var json = try #require(JSONSerialization.jsonObject(with: data(name)) as? [String: Any])
+        try edited(data(name), edit)
+    }
+
+    /// Feed bytes with a further change applied, so edits can be stacked:
+    /// `edited(withPrivateBlock(...)) { $0["generated_at"] = ... }`.
+    static func edited(_ feed: Data, _ edit: (inout [String: Any]) -> Void) throws -> Data {
+        var json = try #require(JSONSerialization.jsonObject(with: feed) as? [String: Any])
         edit(&json)
         return try JSONSerialization.data(withJSONObject: json)
     }
@@ -36,28 +42,36 @@ extension Fixture {
         }
     }
 
-    /// Edits the first block of the last plan (the feed's "today") in a fixture.
-    static func mutatedFirstBlock(_ name: String, _ edit: @escaping (inout [String: Any]) -> Void) throws -> Data {
-        try mutated(name) { json in
-            var days = json["days"] as! [[String: Any]]
-            var today = days[days.count - 1]
-            var blocks = today["blocks"] as! [[String: Any]]
-            edit(&blocks[0])
-            today["blocks"] = blocks
-            days[days.count - 1] = today
-            json["days"] = days
+    /// Edits the list of blocks of one plan: the plan dated `date`, or the last plan (the feed's
+    /// "today") when `date` is nil. Use it to reorder, empty or change several blocks at once.
+    static func mutatedBlocks(_ name: String, date: String? = nil,
+                              _ edit: @escaping (inout [[String: Any]]) -> Void) throws -> Data {
+        try mutatedDays(name) { days in
+            let day = date.map { date in days.firstIndex { $0["date"] as? String == date }! } ?? days.count - 1
+            var blocks = days[day]["blocks"] as! [[String: Any]]
+            edit(&blocks)
+            days[day]["blocks"] = blocks
         }
     }
 
-    /// Edits one block, named the way its id is (`date#row`): `mutatedBlock(name, "2026-11-10", row: 4)`.
-    static func mutatedBlock(_ name: String, _ date: String, row: Int,
-                             _ edit: @escaping (inout [String: Any]) -> Void) throws -> Data {
-        try mutatedDays(name) { days in
-            let day = days.firstIndex { $0["date"] as? String == date }!
-            var blocks = days[day]["blocks"] as! [[String: Any]]
+    /// Edits the first block of the last plan (the feed's "today") in a fixture.
+    static func mutatedFirstBlock(_ name: String, _ edit: @escaping (inout [String: Any]) -> Void) throws -> Data {
+        try mutatedBlocks(name) { edit(&$0[0]) }
+    }
+
+    /// Edits one block, named by its id (`<date>#<row>`, ADR 0003), e.g. `mutatedBlock(name, id: "2026-11-10#4")`.
+    static func mutatedBlock(_ name: String, id: String, _ edit: @escaping (inout [String: Any]) -> Void) throws -> Data {
+        let parts = id.split(separator: "#")
+        let date = String(parts[0])
+        let row = Int(parts[1])!
+        return try mutatedBlocks(name, date: date) { blocks in
             let index = blocks.firstIndex { $0["row"] as? Int == row }!
             edit(&blocks[index])
-            days[day]["blocks"] = blocks
         }
+    }
+
+    /// A fixture with the block `id` marked `private: true`. The shipped fixtures predate `private`.
+    static func withPrivateBlock(_ name: String, id: String) throws -> Data {
+        try mutatedBlock(name, id: id) { $0["private"] = true }
     }
 }

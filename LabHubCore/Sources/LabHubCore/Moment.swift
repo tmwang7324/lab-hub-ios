@@ -22,8 +22,9 @@ public enum Moment: Equatable, Sendable {
     /// the user to the app instead.
     case cantRefresh
 
-    /// What a private block shows instead of its task (CONTEXT.md, Private block).
-    public static let busyText = "Busy"
+    /// What a private block shows instead of its task (CONTEXT.md, Private block). Not public:
+    /// surfaces read the text from the Moment and never need to know the rule.
+    static let busyText = "Busy"
 
     /// The one entry point: feed bytes plus an instant give the Moment.
     ///

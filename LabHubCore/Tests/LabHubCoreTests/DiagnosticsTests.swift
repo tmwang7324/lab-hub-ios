@@ -123,7 +123,7 @@ struct MomentDiagnosticsTests {
 
     @Test("a private block is logged by id and marked private, never by its text")
     func logsPrivateBlock() throws {
-        let data = try Fixture.mutatedBlock("feed-2026-11-20", "2026-11-20", row: 1) { $0["private"] = true }
+        let data = try Fixture.withPrivateBlock("feed-2026-11-20", id: "2026-11-20#1")
         let recorder = LogRecorder()
         _ = try Moment.resolve(feedData: data, at: ny("2026-11-20 09:00"), log: recorder.log)
         _ = try Moment.resolve(feedData: data, at: ny("2026-11-20 10:00"), log: recorder.log)

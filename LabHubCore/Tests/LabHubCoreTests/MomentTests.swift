@@ -145,15 +145,15 @@ struct MomentCurrentBlockTests {
 
 @Suite("Moment: waiting for the next block")
 struct MomentWaitingTests {
-    @Test("a gap between two blocks waits for the following block")
-    func gap() throws {
+    @Test("between two blocks it waits for the following block")
+    func betweenBlocks() throws {
         // Nov 20: block 1 ends 10:30, block 2 runs 10:40 to 11:10.
         let moment = try Moment.resolve(feedData: Fixture.data("feed-2026-11-20"), at: ny("2026-11-20 10:35"))
         #expect(moment == .waiting(text: "Task 2", start: ny("2026-11-20 10:40"), end: ny("2026-11-20 11:10")))
     }
 
-    @Test("at a block's exact end, with a gap after it, the Moment is waiting")
-    func exactEndOfBlockBeforeGap() throws {
+    @Test("at a block's exact end, before the Next block starts, the Moment is waiting")
+    func exactEndBeforeNextBlock() throws {
         let moment = try Moment.resolve(feedData: Fixture.data("feed-2026-11-20"), at: ny("2026-11-20 10:30"))
         #expect(moment == .waiting(text: "Task 2", start: ny("2026-11-20 10:40"), end: ny("2026-11-20 11:10")))
     }
@@ -201,11 +201,7 @@ struct MomentWaitingTests {
     @Test("the Next block is the earliest to start, not the first listed")
     func earliestNotFirstListed() throws {
         // Reverse the blocks inside the Nov 20 plan: block 3 is now listed first, but block 2 starts first.
-        let data = try Fixture.mutatedDays("feed-2026-11-20") { days in
-            var blocks = days[days.count - 1]["blocks"] as! [[String: Any]]
-            blocks.reverse()
-            days[days.count - 1]["blocks"] = blocks
-        }
+        let data = try Fixture.mutatedBlocks("feed-2026-11-20") { $0.reverse() }
         let moment = try Moment.resolve(feedData: data, at: ny("2026-11-20 10:35"))
         #expect(moment == .waiting(text: "Task 2", start: ny("2026-11-20 10:40"), end: ny("2026-11-20 11:10")))
     }
@@ -258,20 +254,14 @@ struct MomentNothingLeftTests {
     @Test("today's plan with no blocks gives nothing left, not a separate \"no plan\" Moment")
     func todayHasNoBlocks() throws {
         // Nov 20 feed with today's plan emptied; yesterday's (Nov 19) blocks all ended by 20:30.
-        let data = try Fixture.mutatedDays("feed-2026-11-20") { days in
-            days[days.count - 1]["blocks"] = [[String: Any]]()
-        }
+        let data = try Fixture.mutatedBlocks("feed-2026-11-20") { $0.removeAll() }
         #expect(try Moment.resolve(feedData: data, at: ny("2026-11-20 10:00")) == .nothingLeft)
     }
 
     @Test("a block that can never be current does not keep the day open")
     func invalidLastBlock() throws {
         // Nov 20's last block (11:20 to 11:40) made to end before it starts: after 11:10 nothing is left.
-        let data = try Fixture.mutatedDays("feed-2026-11-20") { days in
-            var blocks = days[days.count - 1]["blocks"] as! [[String: Any]]
-            blocks[blocks.count - 1]["end"] = "2026-11-20T11:00:00-05:00"
-            days[days.count - 1]["blocks"] = blocks
-        }
+        let data = try Fixture.mutatedBlock("feed-2026-11-20", id: "2026-11-20#3") { $0["end"] = "2026-11-20T11:00:00-05:00" }
         #expect(try Moment.resolve(feedData: data, at: ny("2026-11-20 11:15")) == .nothingLeft)
     }
 }
@@ -364,13 +354,9 @@ struct MomentStaleFeedTests {
 
 @Suite("Moment: private blocks show as Busy")
 struct MomentPrivateBlockTests {
-    private func privateBlock(_ name: String, _ date: String, row: Int) throws -> Data {
-        try Fixture.mutatedBlock(name, date, row: row) { $0["private"] = true }
-    }
-
     @Test("a private current block shows Busy and its end, with no task text in the result")
     func privateCurrent() throws {
-        let data = try privateBlock("feed-2026-11-20", "2026-11-20", row: 1)
+        let data = try Fixture.withPrivateBlock("feed-2026-11-20", id: "2026-11-20#1")
         let moment = try Moment.resolve(feedData: data, at: ny("2026-11-20 10:00"))
         #expect(moment == .inBlock(text: "Busy", end: ny("2026-11-20 10:30")))
         #expect(!String(describing: moment).contains("Task 1"))
@@ -378,7 +364,7 @@ struct MomentPrivateBlockTests {
 
     @Test("a private Next block shows Busy in the waiting Moment")
     func privateNext() throws {
-        let data = try privateBlock("feed-2026-11-20", "2026-11-20", row: 2)
+        let data = try Fixture.withPrivateBlock("feed-2026-11-20", id: "2026-11-20#2")
         let moment = try Moment.resolve(feedData: data, at: ny("2026-11-20 10:35"))
         #expect(moment == .waiting(text: "Busy", start: ny("2026-11-20 10:40"), end: ny("2026-11-20 11:10")))
         #expect(!String(describing: moment).contains("Task 2"))
@@ -386,7 +372,7 @@ struct MomentPrivateBlockTests {
 
     @Test("a private break shows Busy and is still a break")
     func privateBreak() throws {
-        let data = try privateBlock("feed-2026-11-10", "2026-11-10", row: 4)
+        let data = try Fixture.withPrivateBlock("feed-2026-11-10", id: "2026-11-10#4")
         let moment = try Moment.resolve(feedData: data, at: ny("2026-11-10 13:30"))
         #expect(moment == .inBreak(text: "Busy", end: ny("2026-11-10 13:55")))
     }
@@ -395,27 +381,22 @@ struct MomentPrivateBlockTests {
         "2026-11-10 23:45", "2026-11-11 00:15",
     ])
     func privateAfterMidnight(at: String) throws {
-        let data = try privateBlock("feed-2026-11-10", "2026-11-10", row: 11)
+        let data = try Fixture.withPrivateBlock("feed-2026-11-10", id: "2026-11-10#11")
         let moment = try Moment.resolve(feedData: data, at: ny(at))
         #expect(moment == .inBlock(text: "Busy", end: ny("2026-11-11 00:30")))
     }
 
     @Test("a private late block from yesterday's plan shows Busy")
     func privateYesterday() throws {
-        let data = try privateBlock("feed-2026-11-10", "2026-11-09", row: 7)
+        let data = try Fixture.withPrivateBlock("feed-2026-11-10", id: "2026-11-09#7")
         let moment = try Moment.resolve(feedData: data, at: ny("2026-11-10 00:30"))
         #expect(moment == .inBlock(text: "Busy", end: ny("2026-11-10 00:50")))
     }
 
     @Test("a private block in a stale feed still shows Busy")
     func privateInStaleFeed() throws {
-        let data = try Fixture.mutated("feed-2026-11-20") { json in
-            json["generated_at"] = "2026-11-18T06:00:00-05:00"
-            var days = json["days"] as! [[String: Any]]
-            var blocks = days[1]["blocks"] as! [[String: Any]]
-            blocks[0]["private"] = true
-            days[1]["blocks"] = blocks
-            json["days"] = days
+        let data = try Fixture.edited(Fixture.withPrivateBlock("feed-2026-11-20", id: "2026-11-20#1")) {
+            $0["generated_at"] = "2026-11-18T06:00:00-05:00"
         }
         let moment = try Moment.resolve(feedData: data, at: ny("2026-11-20 10:00"))
         #expect(moment == .inBlock(text: "Busy", end: ny("2026-11-20 10:30")))
@@ -423,7 +404,7 @@ struct MomentPrivateBlockTests {
 
     @Test("a block marked `private: false`, or with no `private`, shows its task text")
     func notPrivate() throws {
-        let explicit = try Fixture.mutatedBlock("feed-2026-11-20", "2026-11-20", row: 1) { $0["private"] = false }
+        let explicit = try Fixture.mutatedBlock("feed-2026-11-20", id: "2026-11-20#1") { $0["private"] = false }
         let expected = Moment.inBlock(text: "Task 1", end: ny("2026-11-20 10:30"))
         #expect(try Moment.resolve(feedData: explicit, at: ny("2026-11-20 10:00")) == expected)
         #expect(try Moment.resolve(feedData: Fixture.data("feed-2026-11-20"), at: ny("2026-11-20 10:00")) == expected)
@@ -431,7 +412,7 @@ struct MomentPrivateBlockTests {
 
     @Test("only the private block is hidden: the blocks around it keep their text")
     func onlyThePrivateBlockIsHidden() throws {
-        let data = try privateBlock("feed-2026-11-20", "2026-11-20", row: 1)
+        let data = try Fixture.withPrivateBlock("feed-2026-11-20", id: "2026-11-20#1")
         #expect(try Moment.resolve(feedData: data, at: ny("2026-11-20 09:00"))
                 == .waiting(text: "Busy", start: ny("2026-11-20 09:30"), end: ny("2026-11-20 10:30")))
         #expect(try Moment.resolve(feedData: data, at: ny("2026-11-20 10:35"))

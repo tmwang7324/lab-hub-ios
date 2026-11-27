@@ -66,7 +66,7 @@ struct CommandLineEndToEndTests {
         #expect(result.stdout.hasPrefix("in a break: Break 4"))
     }
 
-    @Test("in a gap it says which block is next")
+    @Test("between blocks it says which block is next")
     func waiting() throws {
         let result = try CLI.run([CLI.fixturePath("feed-2026-11-20"), "--at", "2026-11-20T10:35:00-05:00"])
         #expect(result.status == 0)
@@ -115,7 +115,7 @@ struct CommandLineEndToEndTests {
 
     @Test("a private block prints as Busy, and its task appears nowhere in the output")
     func privateBlockIsBusy() throws {
-        let data = try Fixture.mutatedBlock("feed-2026-11-20", "2026-11-20", row: 1) { $0["private"] = true }
+        let data = try Fixture.withPrivateBlock("feed-2026-11-20", id: "2026-11-20#1")
         let file = FileManager.default.temporaryDirectory.appendingPathComponent("labhub-\(UUID().uuidString).json")
         try data.write(to: file)
         defer { try? FileManager.default.removeItem(at: file) }
@@ -197,7 +197,7 @@ struct CommandLineEndToEndTests {
 /// Knows the answer without using the code under test: it reads the raw JSON and checks each block's
 /// times itself. It accepts any matching block, because which one wins on an overlap is not specified.
 private struct Oracle {
-    struct Row { let start: Date; let end: Date; let task: String; let isBreak: Bool }
+    struct Row { let start: Date; let end: Date; let displayText: String; let isBreak: Bool }
     let rows: [Row]
     let generatedAt: Date
 
@@ -210,7 +210,7 @@ private struct Oracle {
                 Row(start: parse.date(from: block["start"] as! String)!,
                     end: parse.date(from: block["end"] as! String)!,
                     // What the lock screen may show: a private block's task never appears.
-                    task: (block["private"] as? Bool == true) ? "Busy" : block["task"] as! String,
+                    displayText: (block["private"] as? Bool == true) ? "Busy" : block["task"] as! String,
                     isBreak: (block["kind"] as! String) == "break")
             }
         }
@@ -218,7 +218,7 @@ private struct Oracle {
 
     func acceptable(at instant: Date) -> [Moment] {
         let current = rows.filter { $0.start <= instant && instant < $0.end }
-            .map { $0.isBreak ? Moment.inBreak(text: $0.task, end: $0.end) : .inBlock(text: $0.task, end: $0.end) }
+            .map { $0.isBreak ? Moment.inBreak(text: $0.displayText, end: $0.end) : .inBlock(text: $0.displayText, end: $0.end) }
         if !current.isEmpty { return current }
 
         // Nothing current: the Next block is any block (of any plan) that starts soonest after the instant.
@@ -228,7 +228,7 @@ private struct Oracle {
             let stale = instant.timeIntervalSince(generatedAt) > 26 * 3600
             return [stale ? .cantRefresh : .nothingLeft]
         }
-        return future.filter { $0.start == soonest }.map { Moment.waiting(text: $0.task, start: $0.start, end: $0.end) }
+        return future.filter { $0.start == soonest }.map { Moment.waiting(text: $0.displayText, start: $0.start, end: $0.end) }
     }
 
     /// Every block edge, with one second either side: where mistakes hide.
